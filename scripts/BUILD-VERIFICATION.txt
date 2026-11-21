@@ -1,0 +1,35 @@
+TCTC Guardian Z797 v1.0.0 - First Public Source Package Verification
+
+Verified after source-layout repair in the non-Windows preparation environment (Python 3.13 / Linux):
+- Python compileall (`python -m compileall -q src tests`): PASS
+- Application --self-check (`python src/main.py --self-check`): PASS
+- Unit tests (`python -m unittest discover -s tests -t . -q`): 252 / 252 PASS
+- Safe lab simulator lifecycle (prepare/status/cleanup): PASS in an isolated temporary test directory
+- Sysmon XML parsing and policy contract: PASS; Event 29 FileExecutableDetected is present and Event 27 FileBlockExecutable is absent
+- Source archive CRC/integrity: PASS
+- SHA-256 sidecar: generated and independently checked
+
+Source-level and fixture coverage includes:
+- Sample-specific process/file/persistence/network and event-log matching for the analysed TCTC/Z797 profile.
+- Sysmon, Windows Security process/persistence, PowerShell 4103/4104, Task Scheduler, and WMI Activity telemetry parsing and coverage states.
+- ProcessAccess actor attribution using source identity and write-capable access rather than target-process names alone.
+- Exact file quarantine gates based on current path, SHA-256, byte size, and artifact evidence; reversible persistence and Hosts changes use backups and revalidation.
+- Read-only memory scanner API-path fixtures for OpenProcess, VirtualQueryEx, targeted ReadProcessMemory, PE-header probes, thread/module snapshots, NtQueryInformationThread, QueryWorkingSetEx, and AMSI export inspection.
+- Report counters for actual API calls, memory regions, targeted bytes read, per-process results, historical channel availability, parsed remote endpoints, persistence enumeration, and Windows build identification.
+- Safe lab workflow that writes a text-only canary, optionally emits a harmless cmd.exe echo process event, labels lab evidence [LAB]/Info, and cleans only its own lab directory.
+
+Not verified in this environment:
+- Windows Event Log query and native EvtSubscribe delivery
+- Windows WinVerifyTrust, DISM, UAC, Sysmon service/driver installation, and live configuration update
+- Actual process enumeration, live memory reads, pinned handles, and Windows remediation operations
+- PySide6 GUI/tray rendering, monitor lifecycle, and Windows DPI behavior
+- Nuitka Windows standalone build and generated launcher inside the .dist output folder (not executed in this non-Windows environment)
+
+Tests use fixtures, mocks, and source contracts where Windows APIs are unavailable. They do not substitute for Windows integration testing. Complete docs/WINDOWS-VALIDATION.md on a disposable supported Windows machine before relying on live response or publishing a binary. No malware was executed and no campaign C2 was contacted.
+
+Public release policy:
+- First public tag: v1.0.0. Earlier 0.9.x iterations were internal development snapshots and are not public releases.
+- Sysmon remains detect-only; Guardian does not block PE creation.
+- The project license has not been selected; all project rights are reserved.
+
+Source-layout regression coverage also checks the moved entrypoint, Sysmon XML, launcher, dependency installer, Nuitka build command, safe-lab launchers, and GitHub Actions paths.

@@ -1,0 +1,51 @@
+# Python
+__pycache__/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+*.py[cod]
+*.pyd
+.venv/
+venv/
+.env
+
+# Build outputs
+build/
+dist/
+release/
+*.spec
+*.egg-info/
+
+# Local application data / incident material
+Quarantine/
+Backups/
+Reports/
+Logs/
+logs/
+reports/
+quarantine/
+backups/
+*.dmp
+*.mem
+*.pcap
+*.pcapng
+
+# Editors and OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Diagnostic output and local machine configuration
+*.log
+*.trace
+*.tmp
+*.bak
+local.settings.json
+user.settings.json
+
+# Packaging artifacts
+*.zip
+*.sha256

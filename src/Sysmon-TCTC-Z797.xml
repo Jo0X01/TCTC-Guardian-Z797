@@ -1,0 +1,96 @@
+<Sysmon schemaversion="4.90">
+  <!-- Targeted Z797 telemetry. SHA256 is explicitly enabled for process-create hashes. -->
+  <HashAlgorithms>SHA256</HashAlgorithms>
+  <EventFiltering>
+    <!-- Process ancestry: script hosts, target processes, and execution from the exact staging root. -->
+    <ProcessCreate onmatch="include">
+      <Image condition="end with">\powershell.exe</Image>
+      <Image condition="end with">\pwsh.exe</Image>
+      <Image condition="end with">\cmd.exe</Image>
+      <Image condition="end with">\wscript.exe</Image>
+      <Image condition="end with">\cscript.exe</Image>
+      <Image condition="end with">\mshta.exe</Image>
+      <Image condition="end with">\rundll32.exe</Image>
+      <Image condition="end with">\RuntimeBroker.exe</Image>
+      <Image condition="end with">\explorer.exe</Image>
+      <Image condition="end with">\chrome.exe</Image>
+      <Image condition="contains">\Temp\Local\</Image>
+    </ProcessCreate>
+
+    <!-- Capture children of script hosts so the app can correlate their parent command lines and lineage. -->
+    <RuleGroup name="Z797 script-host descendants" groupRelation="or">
+      <ProcessCreate onmatch="include">
+        <ParentImage condition="end with">\powershell.exe</ParentImage>
+        <ParentImage condition="end with">\pwsh.exe</ParentImage>
+        <ParentImage condition="end with">\cmd.exe</ParentImage>
+        <ParentImage condition="end with">\wscript.exe</ParentImage>
+        <ParentImage condition="end with">\cscript.exe</ParentImage>
+        <ParentImage condition="end with">\mshta.exe</ParentImage>
+      </ProcessCreate>
+    </RuleGroup>
+
+    <!-- Only the campaign's published / locally recovered destination infrastructure. -->
+    <RuleGroup name="Z797 confirmed network addresses" groupRelation="or">
+      <NetworkConnect onmatch="include">
+        <DestinationIp condition="is">93.94.52.29</DestinationIp>
+        <DestinationIp condition="is">109.238.86.137</DestinationIp>
+      </NetworkConnect>
+    </RuleGroup>
+    <RuleGroup name="Z797 campaign network names" groupRelation="or">
+      <NetworkConnect onmatch="include">
+        <DestinationHostname condition="end with">benderoflight.com</DestinationHostname>
+        <DestinationHostname condition="end with">survivomatic.com</DestinationHostname>
+        <DestinationHostname condition="end with">ruthaiv.com</DestinationHostname>
+      </NetworkConnect>
+      <DnsQuery onmatch="include">
+        <QueryName condition="end with">benderoflight.com</QueryName>
+        <QueryName condition="end with">survivomatic.com</QueryName>
+        <QueryName condition="end with">ruthaiv.com</QueryName>
+      </DnsQuery>
+    </RuleGroup>
+
+    <!-- File creation is scoped to the two Temp\Local staging trees. -->
+    <FileCreate onmatch="include">
+      <TargetFilename condition="contains">\Temp\Local\</TargetFilename>
+    </FileCreate>
+
+    <!-- Track timestamp manipulation and deletion only inside the sample staging trees. -->
+    <FileCreateTime onmatch="include">
+      <TargetFilename condition="contains">\Temp\Local\</TargetFilename>
+    </FileCreateTime>
+    <FileDeleteDetected onmatch="include">
+      <TargetFilename condition="contains">\Temp\Local\</TargetFilename>
+    </FileDeleteDetected>
+    <FileExecutableDetected onmatch="include">
+      <TargetFilename condition="contains">\Temp\Local\</TargetFilename>
+    </FileExecutableDetected>
+
+    <!-- Registry persistence telemetry is limited to autorun locations. -->
+    <RegistryEvent onmatch="include">
+      <TargetObject condition="contains">\CurrentVersion\Run</TargetObject>
+      <TargetObject condition="contains">\CurrentVersion\RunOnce</TargetObject>
+    </RegistryEvent>
+
+    <!-- Image loads from the staging root. -->
+    <ImageLoad onmatch="include">
+      <ImageLoaded condition="contains">\Temp\Local\</ImageLoaded>
+    </ImageLoad>
+
+    <!-- High-signal cross-process behaviors, restricted to the sample's target processes. -->
+    <CreateRemoteThread onmatch="include">
+      <TargetImage condition="end with">\RuntimeBroker.exe</TargetImage>
+      <TargetImage condition="end with">\explorer.exe</TargetImage>
+      <TargetImage condition="end with">\chrome.exe</TargetImage>
+    </CreateRemoteThread>
+    <ProcessAccess onmatch="include">
+      <TargetImage condition="end with">\RuntimeBroker.exe</TargetImage>
+      <TargetImage condition="end with">\explorer.exe</TargetImage>
+      <TargetImage condition="end with">\chrome.exe</TargetImage>
+    </ProcessAccess>
+    <ProcessTampering onmatch="include">
+      <Image condition="end with">\RuntimeBroker.exe</Image>
+      <Image condition="end with">\explorer.exe</Image>
+      <Image condition="end with">\chrome.exe</Image>
+    </ProcessTampering>
+  </EventFiltering>
+</Sysmon>
