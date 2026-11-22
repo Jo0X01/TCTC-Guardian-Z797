@@ -22,14 +22,17 @@ class SourceLayoutContractTests(unittest.TestCase):
 
     def test_nuitka_build_uses_src_entrypoint_and_bundles_current_resource_paths(self):
         build = (ROOT / "scripts" / "Build-Windows.bat").read_text(encoding="utf-8")
+
+        self.assertIn("--onefile", build)
+        self.assertNotIn("--standalone", build)
         self.assertIn("--include-package=guardian", build)
         self.assertIn(r"src\main.py", build)
         self.assertIn(r"src\Sysmon-TCTC-Z797.xml=Sysmon-TCTC-Z797.xml", build)
-        self.assertIn("--output-folder-name=TCTC-Guardian-Z797", build)
-        self.assertIn(r"scripts\Run-Standalone.bat", build)
-        self.assertTrue((ROOT / "scripts" / "Run-Standalone.bat").is_file())
         self.assertIn("--include-data-dir=assets=assets", build)
-
+        self.assertIn("--output-filename=TCTC-Guardian-Z797.exe", build)
+        self.assertIn(r'set "OUTPUT_DIR=%PROJECT_ROOT%\bin"', build)
+        self.assertIn(r'set "OUTPUT_EXE=%OUTPUT_DIR%\TCTC-Guardian-Z797.exe"', build)
+        self.assertIn("move /y", build)
     def test_safe_lab_batch_files_call_script_in_their_own_folder(self):
         run = (ROOT / "labs" / "Run-Safe-Z797-Lab.bat").read_text(encoding="utf-8")
         cleanup = (ROOT / "labs" / "Cleanup-Safe-Z797-Lab.bat").read_text(encoding="utf-8")

@@ -18,9 +18,9 @@ if exist "%PROJECT_ROOT%\dist\TCTC-Guardian-Z797.dist\TCTC-Guardian-Z797.exe" (
 )
 set "APP_EXIT=%ERRORLEVEL%"
 if not "%APP_EXIT%"=="0" (
-  echo.
-  echo TCTC Guardian Z797 stopped with exit code %APP_EXIT%. Review the message above.
-  pause
+    echo.
+    echo TCTC Guardian Z797 stopped with exit code %APP_EXIT%. Review the message above.
+    pause
 )
 popd
 exit /b %APP_EXIT%

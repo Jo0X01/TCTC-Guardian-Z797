@@ -49,3 +49,5 @@ user.settings.json
 # Packaging artifacts
 *.zip
 *.sha256
+
+bin/

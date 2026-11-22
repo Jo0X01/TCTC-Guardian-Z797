@@ -32,6 +32,17 @@ LOG = logging.getLogger(__name__)
 SYSMON_DOWNLOAD_URL = "https://download.sysinternals.com/files/Sysmon.zip"
 SYSMON_DOWNLOAD_HOST = "download.sysinternals.com"
 SYSMON_CHANNEL = "Microsoft-Windows-Sysmon/Operational"
+# Exact Sysmon 15.22 payload hashes.
+# The ZIP and executable hashes match the published WAPT
+# package manifest for the Windows 10-tested Sysmon 15.22 build.
+SYSMON_WIN10_22H2_ARCHIVE_SHA256 = (
+    "00ecf1b46aec99299d3ae0bca79dc621458bd014b20b509d7c5c8e8c8611aa54"
+)
+SYSMON_WIN10_22H2_BINARY_SHA256 = {
+    "Sysmon64.exe": (
+        "83d31f2478dc6716cfdbf69e5c384bf043072b5f0d8d7b2eea365f709fda4352"
+    ),
+}
 SYSMON_SERVICE_NAMES = ("Sysmon64", "Sysmon")
 CERT_NAME_ATTR_TYPE = 3  # CertGetNameStringW: pvTypePara is an X.500 attribute OID.
 OID_ORGANIZATION_NAME = "2.5.4.10"  # szOID_ORGANIZATION_NAME (O)
@@ -294,37 +305,93 @@ def _windows_builtin_sysmon_enabled() -> bool:
     return bool(match and match.group(1).strip().lower() == "enabled")
 
 
+def _evaluate_sysmon_windows_support(
+    build: int,
+    product_name: str,
+    architecture: str,
+) -> tuple[bool, str]:
+    """Evaluate supported Windows builds and the validated Win10 compatibility path."""
+    display_name = _display_windows_product_name(product_name, build)
+    is_server = "server" in str(display_name).casefold()
+
+    if is_server:
+        minimum = 17763
+        required = "Windows Server 2019 or newer"
+
+        if build < minimum:
+            return (
+                False,
+                f"This Sysmon release requires {required}. "
+                f"Detected build {build} ({display_name or 'Windows'}).",
+            )
+
+        return True, f"Supported Windows Server build {build} ({display_name})."
+
+    if build >= 22000:
+        return True, f"Supported Windows 11 build {build} ({display_name or 'Windows'})."
+
+    if 19045 <= build < 22000:
+        arch = str(architecture or "").casefold()
+
+        if arch not in {"amd64", "x86_64", "x64"}:
+            return (
+                False,
+                "Windows 10 compatibility is currently validated only on x64. "
+                f"Detected architecture: {architecture or 'Unknown'}.",
+            )
+
+        return (
+            True,
+            "Windows 10 22H2 x64 compatibility mode. "
+            f"Detected build {build} ({display_name or 'Windows 10'}). "
+            "New Sysmon installations are restricted to the exact pinned "
+            "Sysmon 15.22 payload. Microsoft currently documents Windows 11 "
+            "and higher for current Sysmon client support; independent "
+            "Windows 10 x64 installation and upgrade validation is available. "
+            "Guardian will verify the payload hashes, Microsoft signature, "
+            "Event 29 schema and operational readiness before enabling monitoring.",
+        )
+
+    return (
+        False,
+        "This release requires Windows 10 22H2 x64 (build 19045) or Windows 11 "
+        "and newer. Older Windows 10 client builds are not accepted. "
+        f"Detected build {build} ({display_name or 'Windows'}).",
+    )
+
+
 def _is_supported_windows() -> tuple[bool, str]:
     if not windows.IS_WINDOWS:
         return False, "Sysmon setup is available only on Windows."
+
     try:
         build = int(sys.getwindowsversion().build)
     except Exception:
         build = 0
+
     product_name = ""
     try:
         import winreg
 
         with winreg.OpenKey(
-            winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\Microsoft\Windows NT\CurrentVersion"
+            winreg.HKEY_LOCAL_MACHINE,
+            r"SOFTWARE\Microsoft\Windows NT\CurrentVersion",
         ) as key:
             product_name, _kind = winreg.QueryValueEx(key, "ProductName")
     except Exception:
         pass
-    display_name = _display_windows_product_name(product_name, build)
-    is_server = "server" in str(display_name).lower()
-    minimum = 17763 if is_server else 22000
-    if build < minimum:
-        required = (
-            "Windows Server 2019 or newer" if is_server else "Windows 11 or newer"
-        )
-        return (
-            False,
-            f"This Sysmon release requires {required}. Detected build {build} ({display_name or 'Windows'}).",
-        )
-    return True, f"Supported Windows build {build} ({display_name or 'Windows'})."
 
+    architecture = (
+        os.environ.get("PROCESSOR_ARCHITEW6432")
+        or platform.machine()
+        or ""
+    )
 
+    return _evaluate_sysmon_windows_support(
+        build,
+        str(product_name),
+        architecture,
+    )
 def _display_windows_product_name(product_name: str, build: int) -> str:
     """Windows 11 can retain a legacy 'Windows 10' ProductName registry value."""
     value = str(product_name or "").strip()
@@ -344,6 +411,62 @@ def _expected_binary_name() -> str:
     return "Sysmon.exe"
 
 
+def _is_windows10_22h2_compatibility_mode() -> bool:
+    try:
+        build = int(sys.getwindowsversion().build)
+    except Exception:
+        return False
+
+    architecture = (
+        os.environ.get("PROCESSOR_ARCHITEW6432")
+        or platform.machine()
+        or ""
+    ).casefold()
+
+    return (
+        19045 <= build < 22000
+        and architecture in {"amd64", "x86_64", "x64"}
+    )
+
+
+def _bootstrap_sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _validate_win10_sysmon_payload(
+    archive: Path,
+    executable: Path,
+    binary_name: str,
+) -> None:
+    """Accept only the exact Sysmon 15.22 payload tested for Windows 10 x64."""
+    expected_binary_hash = SYSMON_WIN10_22H2_BINARY_SHA256.get(binary_name)
+
+    if not expected_binary_hash:
+        raise RuntimeError(
+            f"No pinned Windows 10 Sysmon 15.22 binary exists for {binary_name}."
+        )
+
+    archive_hash = _bootstrap_sha256(archive).lower()
+
+    if archive_hash != SYSMON_WIN10_22H2_ARCHIVE_SHA256:
+        raise RuntimeError(
+            "The downloaded Sysmon ZIP does not match the pinned Windows 10 "
+            "Sysmon 15.22 archive. No installation was performed. "
+            "The Microsoft download may have changed; Guardian must be updated "
+            "and revalidated before using a different build on Windows 10."
+        )
+
+    binary_hash = _bootstrap_sha256(executable).lower()
+
+    if binary_hash != expected_binary_hash:
+        raise RuntimeError(
+            "The extracted Sysmon executable does not match the pinned "
+            "Windows 10 Sysmon 15.22 SHA-256. Installation was refused."
+        )
 def _download_sysmon_archive(
     destination: Path, *, opener: Callable[..., Any] | None = None
 ) -> None:
@@ -853,6 +976,13 @@ def _locate_or_download_binary(
         member = _validate_sysmon_archive(archive)
         downloaded = temp_root / expected_name
         _extract_sysmon_binary(archive, member, downloaded)
+        if _is_windows10_22h2_compatibility_mode():
+            LOG.warning(
+                "Windows 10 compatibility mode: validating the pinned Sysmon 15.22 payload."
+            )
+            _validate_win10_sysmon_payload(
+                archive, downloaded, expected_name
+            )
         signer = _verify_microsoft_authenticode(downloaded)
         target = install_root / expected_name
         staged = install_root / (expected_name + ".new")

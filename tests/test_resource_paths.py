@@ -25,7 +25,7 @@ class ResourcePathTests(unittest.TestCase):
                 package_file=package / "resource_paths.py",
             )
 
-            self.assertEqual(result, resource)
+            self.assertEqual(result.resolve(), resource.resolve())
 
     def test_nuitka_standalone_prefers_resources_beside_executable(self):
         with tempfile.TemporaryDirectory() as td:
@@ -46,7 +46,7 @@ class ResourcePathTests(unittest.TestCase):
                 package_file=unrelated_source,
             )
 
-            self.assertEqual(result, resource)
+            self.assertEqual(result.resolve(), resource.resolve())
 
     def test_nuitka_onefile_finds_resource_in_runtime_directory(self):
         with tempfile.TemporaryDirectory() as td:
@@ -76,7 +76,7 @@ class ResourcePathTests(unittest.TestCase):
                     package_file=source_package / "resource_paths.py",
                 )
 
-            self.assertEqual(result, resource)
+            self.assertEqual(result.resolve(), resource.resolve())
 
     def test_nuitka_onefile_runtime_resource_has_priority_over_sidecar(self):
         with tempfile.TemporaryDirectory() as td:
@@ -106,7 +106,7 @@ class ResourcePathTests(unittest.TestCase):
                     ),
                 )
 
-            self.assertEqual(result, runtime_resource)
+            self.assertEqual(result.resolve(), runtime_resource.resolve())
 
     def test_missing_nuitka_runtime_attribute_falls_back_to_executable(self):
         with tempfile.TemporaryDirectory() as td:
@@ -129,7 +129,7 @@ class ResourcePathTests(unittest.TestCase):
                     ),
                 )
 
-            self.assertEqual(result, resource)
+            self.assertEqual(result.resolve(), resource.resolve())
 
     def test_parent_traversal_resource_is_rejected(self):
         self.assertIsNone(resolve_resource("..", "private.txt"))

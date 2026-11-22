@@ -119,6 +119,88 @@ class SysmonBootstrapTests(unittest.TestCase):
         self.assertEqual(organization, "Microsoft Corporation")
         self.assertEqual(calls, [(3, "2.5.4.10", True), (3, "2.5.4.10", False)])
 
+    def test_windows10_22h2_x64_is_accepted_in_compatibility_mode(self):
+        supported, detail = sysmon_setup._evaluate_sysmon_windows_support(
+            19045, "Windows 10 Home", "AMD64"
+        )
+        self.assertTrue(supported)
+        self.assertIn("Windows 10 22H2", detail)
+        self.assertIn("Sysmon 15.22", detail)
+        self.assertIn("Microsoft", detail)
+
+    def test_windows10_pre_22h2_is_rejected(self):
+        supported, detail = sysmon_setup._evaluate_sysmon_windows_support(
+            19044, "Windows 10 Pro", "AMD64"
+        )
+        self.assertFalse(supported)
+        self.assertIn("19045", detail)
+
+    def test_windows10_x86_is_not_claimed_as_validated(self):
+        supported, detail = sysmon_setup._evaluate_sysmon_windows_support(
+            19045, "Windows 10 Home", "x86"
+        )
+        self.assertFalse(supported)
+        self.assertIn("x64", detail)
+
+    def test_windows11_remains_supported(self):
+        supported, detail = sysmon_setup._evaluate_sysmon_windows_support(
+            26300, "Windows 10 Home", "AMD64"
+        )
+        self.assertTrue(supported)
+        self.assertIn("Windows 11", detail)
+
+    def test_windows_server_2019_remains_supported(self):
+        supported, detail = sysmon_setup._evaluate_sysmon_windows_support(
+            17763, "Windows Server 2019 Standard", "AMD64"
+        )
+        self.assertTrue(supported)
+
+    def test_win10_sysmon_payload_accepts_pinned_15_22_hashes(self):
+        with patch.object(
+            sysmon_setup,
+            "_bootstrap_sha256",
+            side_effect=[
+                sysmon_setup.SYSMON_WIN10_22H2_ARCHIVE_SHA256,
+                sysmon_setup.SYSMON_WIN10_22H2_BINARY_SHA256["Sysmon64.exe"],
+            ],
+        ):
+            sysmon_setup._validate_win10_sysmon_payload(
+                Path("Sysmon.zip"),
+                Path("Sysmon64.exe"),
+                "Sysmon64.exe",
+            )
+
+    def test_win10_sysmon_payload_rejects_changed_archive(self):
+        with patch.object(
+            sysmon_setup,
+            "_bootstrap_sha256",
+            side_effect=[
+                "0" * 64,
+                sysmon_setup.SYSMON_WIN10_22H2_BINARY_SHA256["Sysmon64.exe"],
+            ],
+        ):
+            with self.assertRaisesRegex(RuntimeError, "pinned Windows 10"):
+                sysmon_setup._validate_win10_sysmon_payload(
+                    Path("Sysmon.zip"),
+                    Path("Sysmon64.exe"),
+                    "Sysmon64.exe",
+                )
+
+    def test_win10_sysmon_payload_rejects_changed_binary(self):
+        with patch.object(
+            sysmon_setup,
+            "_bootstrap_sha256",
+            side_effect=[
+                sysmon_setup.SYSMON_WIN10_22H2_ARCHIVE_SHA256,
+                "0" * 64,
+            ],
+        ):
+            with self.assertRaisesRegex(RuntimeError, "SHA-256"):
+                sysmon_setup._validate_win10_sysmon_payload(
+                    Path("Sysmon.zip"),
+                    Path("Sysmon64.exe"),
+                    "Sysmon64.exe",
+                )
     def test_windows_11_build_is_not_mislabeled_from_legacy_registry_product_name(self):
         self.assertEqual(
             sysmon_setup._display_windows_product_name("Windows 10 Home", 26300),
