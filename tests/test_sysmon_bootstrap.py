@@ -9,6 +9,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from guardian import sysmon_setup
+from guardian import resource_paths
 from guardian.realtime import sysmon_readiness
 
 
@@ -352,6 +353,43 @@ class SysmonBootstrapTests(unittest.TestCase):
         self.assertIn("application itself", launcher)
         self.assertIn(r"%PROJECT_ROOT%\src\main.py", launcher)
 
+
+    def test_application_directory_uses_nuitka_onefile_runtime_for_bundled_policy(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            runtime = root / "onefile-runtime"
+            executable_dir = root / "bin"
+
+            runtime.mkdir()
+            executable_dir.mkdir()
+
+            config = runtime / "Sysmon-TCTC-Z797.xml"
+            config.write_text("<Sysmon />", encoding="utf-8")
+
+            executable = executable_dir / "TCTC-Guardian-Z797.exe"
+
+            compiled = type(
+                "Compiled",
+                (),
+                {"python_runtime_dir": str(runtime)},
+            )()
+
+            with patch.object(
+                resource_paths,
+                "__compiled__",
+                compiled,
+                create=True,
+            ), patch.object(
+                sysmon_setup.sys,
+                "argv",
+                [str(executable)],
+            ):
+                result = sysmon_setup._application_directory()
+
+            self.assertEqual(result.resolve(), runtime.resolve())
+            self.assertTrue(
+                (result / "Sysmon-TCTC-Z797.xml").is_file()
+            )
 
 if __name__ == "__main__":
     unittest.main()

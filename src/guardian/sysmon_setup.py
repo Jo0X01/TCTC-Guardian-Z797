@@ -56,6 +56,23 @@ DOWNLOAD_ATTEMPTS = 3
 
 
 def _application_directory() -> Path:
+    """Resolve the directory containing application resources.
+
+    Nuitka Onefile extracts bundled data into python_runtime_dir.
+    sys.argv[0] points to the original executable directory instead.
+    """
+    try:
+        from guardian.resource_paths import resolve_resource
+
+        bundled_config = resolve_resource("Sysmon-TCTC-Z797.xml")
+        if bundled_config is not None:
+            return bundled_config.resolve().parent
+
+    except Exception:
+        LOG.exception(
+            "Could not resolve the bundled Sysmon configuration through resource paths."
+        )
+
     try:
         return Path(sys.argv[0]).resolve().parent
     except Exception:
